@@ -1,6 +1,3 @@
-local null_ls = require("null-ls")
-local null_ls_methods = require("null-ls.methods")
-local null_ls_helpers = require("null-ls.helpers")
 local log = require("nu.log")
 local vim = vim
 
@@ -81,73 +78,5 @@ local function find_commands(text)
     log.trace("Found", #results, "matching cmds for", text, "(", vim.inspect(results), ")")
     return results
 end
-
-local nu_lsp = {
-    name = "nu_lsp",
-    method = null_ls.methods.COMPLETION,
-    filetypes = { "nu" },
-    generator = {
-        fn = function(params)
-            local cmd_prefixes = cmds_to_check(params.content, params.row, params.col)
-            for _, cmd_prefix in ipairs(cmd_prefixes) do
-                local matching_cmds = find_commands(cmd_prefix.cmd_text)
-                if next(matching_cmds) ~= nil then
-                    local cmd_items = {}
-                    for _, matched_cmd in ipairs(matching_cmds) do
-                        local matched_cmd_txt = ""
-                        if cmd_prefix.is_sub_cmd then -- we remove first part of cmd, if its a subcommand
-                            for sub_cmd in string.gmatch(matched_cmd, "[^%s]+") do
-                                matched_cmd_txt = sub_cmd
-                            end
-                        else
-                            matched_cmd_txt = matched_cmd
-                        end
-                        table.insert(cmd_items, { label = matched_cmd_txt, insertText = matched_cmd_txt })
-                    end
-                    return {
-                        {
-                            items = cmd_items,
-                            isIncomplete = true,
-                        },
-                    }
-                end
-            end
-        end,
-    },
-}
-
-local nu_hover = null_ls_helpers.make_builtin {
-    name = "nu_hover",
-    factory = null_ls_helpers.generator_factory,
-    generator_opts = {
-        command = "nu",
-        format = "raw",
-        args = function(params)
-            local cword = vim.fn.expand("<cword>")
-            local nu_cmd =
-            'if (help commands | where name == "' ..
-                cword ..
-                '" | length ) > 0 {help ' ..
-                cword .. ' | str replace -a `\\u001B\\[[0-9;]*m` ``} else {man ' .. cword .. '}'
-            log.trace("Executing", nu_cmd)
-            return { "-c", nu_cmd }
-        end,
-        on_output = function(params, done)
-            if params.err ~= nil then
-                done({ params.err })
-            else
-                done({ params.output })
-            end
-        end
-    },
-    filetypes = { "nu" },
-    method = null_ls_methods.internal.HOVER,
-    meta = {
-        url = "help",
-        description = "nushell help output"
-    }
-}
-
-null_ls.register({ nu_hover, nu_lsp })
 
 return M
